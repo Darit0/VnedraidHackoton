@@ -5,5 +5,5 @@ import vnedraid.inputservice.models.Vacancy;
 import java.util.ArrayList;
 
 public interface Collector {
-    public ArrayList<Vacancy> getVacancies();
+    public void collect();
 }

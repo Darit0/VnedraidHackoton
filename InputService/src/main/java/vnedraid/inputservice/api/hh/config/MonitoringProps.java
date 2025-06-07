@@ -1,4 +1,4 @@
-package vnedraid.inputservice.api.HH.config;
+package vnedraid.inputservice.api.hh.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

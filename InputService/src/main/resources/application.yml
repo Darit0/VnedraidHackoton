@@ -6,7 +6,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
 logging:
   level:
     root: DEBUG
@@ -15,8 +18,11 @@ logging:
 
 hh:
   delay:
-    ms: 300000                # 5
+    ms: 60000
   monitoring:
     requests:
-      - text: "Java developer"
+      - text: "Java Developer"
         area: 1
+
+logging.level:
+  vnedraid.inputservice: INFO

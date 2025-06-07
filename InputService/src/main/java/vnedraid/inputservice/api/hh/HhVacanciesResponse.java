@@ -1,4 +1,4 @@
-package vnedraid.inputservice.api.HH;
+package vnedraid.inputservice.api.hh;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Data;

@@ -23,6 +23,3 @@ hh:
     requests:
       - text: "Java Developer"
         area: 1
-
-logging.level:
-  vnedraid.inputservice: INFO

@@ -10,7 +10,7 @@ import java.util.Map;
 @Component
 public class VacancyMapper {
 
-    public Vacancy toEntity(VacancyDto d, Map<String,Object> extra) {
+    public Vacancy toEntity(VacancyDto d, Map<String, Object> extra) {
         return Vacancy.builder()
                 .id(d.getId())
                 .name(d.getName())
@@ -25,7 +25,7 @@ public class VacancyMapper {
                 .area(d.getArea())
                 .salary(d.getSalary())
                 .salaryRange(d.getSalaryRange())
-                .type(d.getType())
+                .vacancyType(d.getVacancyType())
                 .address(d.getAddress())
                 .employer(d.getEmployer())
                 .snippet(d.getSnippet())
@@ -36,7 +36,7 @@ public class VacancyMapper {
                 .workFormat(d.getWorkFormat())
                 .professionalRoles(d.getProfessionalRoles())
                 .relations(d.getRelations())
-                .extra(extra)          // неизвестные/новые поля, если нужно
+                .extra(extra)
                 .build();
     }
 
@@ -44,3 +44,4 @@ public class VacancyMapper {
         return iso == null ? null : OffsetDateTime.parse(iso);
     }
 }
+

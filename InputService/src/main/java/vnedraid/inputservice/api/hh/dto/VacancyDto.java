@@ -24,7 +24,11 @@ public class VacancyDto {
     private Salary salary;
     @JsonProperty("salary_range")
     private SalaryRange salaryRange;
-    private Type type;
+    /**
+     * 👇 было Type, стало VacancyType
+     */
+    @JsonProperty("type")
+    private VacancyType vacancyType;
     private Address address;
     @JsonProperty("response_url")
     private String responseUrl;
@@ -84,22 +88,19 @@ public class VacancyDto {
     private Boolean isAdvVacancy;
     @JsonProperty("adv_context")
     private Object advContext;
-    /* --- любые новые поля HH появятся здесь ― JsonIgnoreProperties=true защитит парсер --- */
 
-    /* ↓ вложенные структуры */
+    /* ---------- вложенные типы ---------- */
+
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Area {
-        private String id;
-        private String name;
-        private String url;
+        private String id, name, url;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Salary {
-        private Integer from;
-        private Integer to;
+        private Integer from, to;
         private String currency;
         private Boolean gross;
     }
@@ -107,31 +108,26 @@ public class VacancyDto {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SalaryRange {
-        private Integer min;
-        private Integer max;
+        private Integer min, max;
     }
 
+    /**
+     * 🔑 Переименованный класс
+     */
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class Type {
-        private String id;
-        private String name;
+    public static class VacancyType {
+        private String id, name;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Address {
-        private String city;
-        private String street;
-        private String building;
-        private Double lat;
-        private Double lng;
-        private String description;
-        private String raw;
+        private String city, street, building, description, raw, id;
+        private Double lat, lng;
         private Metro metro;
         @JsonProperty("metro_stations")
         private List<Metro> metroStations;
-        private String id;
     }
 
     @Data
@@ -145,16 +141,13 @@ public class VacancyDto {
         private String stationId;
         @JsonProperty("line_id")
         private String lineId;
-        private Double lat;
-        private Double lng;
+        private Double lat, lng;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Employer {
-        private String id;
-        private String name;
-        private String url;
+        private String id, name, url;
         @JsonProperty("alternate_url")
         private String alternateUrl;
         @JsonProperty("logo_urls")
@@ -171,42 +164,36 @@ public class VacancyDto {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Snippet {
-        private String requirement;
-        private String responsibility;
+        private String requirement, responsibility;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Schedule {
-        private String id;
-        private String name;
+        private String id, name;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Experience {
-        private String id;
-        private String name;
+        private String id, name;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Employment {
-        private String id;
-        private String name;
+        private String id, name;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class EmploymentForm {
-        private String id;
-        private String name;
+        private String id, name;
     }
 
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Dict {
-        private String id;
-        private String name;
+        private String id, name;
     }
 }

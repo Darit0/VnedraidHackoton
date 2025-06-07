@@ -19,7 +19,7 @@ import java.util.Map;
 @Builder
 public class Vacancy {
 
-    /* простые скалярные поля, по которым, как правило, фильтруют */
+    /* ========== базовые колонки ========== */
     @Id
     private String id;
     private String name;
@@ -28,52 +28,67 @@ public class Vacancy {
     private OffsetDateTime publishedAt;
     private Boolean archived;
 
-    /* --- ВСЁ остальное кладём в jsonb-колонки, но в Java это строгие POJO/Lists --- */
+    /* ========== jsonb-колонки ========== */
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> department;
-    private Boolean premium;
-    private Boolean hasTest;
-    private Boolean responseLetterRequired;
+    private Boolean premium, hasTest, responseLetterRequired;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Area area;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Salary salary;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.SalaryRange salaryRange;
+
+    /**
+     * 🔑 новое имя поля и тип
+     */
     @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
-    private VacancyDto.Type type;
+    @Column(name = "vacancy_type", columnDefinition = "jsonb")
+    private VacancyDto.VacancyType vacancyType;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Address address;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Employer employer;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Snippet snippet;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Schedule schedule;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Experience experience;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.Employment employment;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private VacancyDto.EmploymentForm employmentForm;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private List<VacancyDto.Dict> workFormat;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private List<VacancyDto.Dict> professionalRoles;
+
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
     private List<Object> relations;

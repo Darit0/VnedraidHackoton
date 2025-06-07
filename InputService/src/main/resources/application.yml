@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hr
+    username: hr
+    password: hr
+  jpa:
+    hibernate:
+      ddl-auto: update        # MVP-????? (??????? ??????? ?????????????)
+    show-sql: true
+
+hh:
+  delay:
+    ms: 180000                # 3 ???
+  monitoring:
+    requests:
+      - text: "Java developer"
+        area: 1               # ??????
+      - text: "QA engineer"
+        area: 113             # ???

@@ -5,5 +5,5 @@ import vnedraid.inputservice.models.Vacancy;
 
 import java.util.UUID;
 
-public interface VacancyRepo extends JpaRepository<Vacancy, UUID> {
+public interface VacancyRepo extends JpaRepository<Vacancy, String> {
 }

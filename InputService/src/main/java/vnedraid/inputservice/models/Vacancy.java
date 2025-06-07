@@ -27,7 +27,8 @@ public class Vacancy {
     private String gender;
     private String age;
     private Boolean requiresCar;
-    private String experience; private String education;
+    private String experience;
+    private String education;
     private String professionalRole;
     private LocalDateTime publishedAt;
     @Lob

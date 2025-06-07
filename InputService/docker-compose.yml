@@ -11,26 +11,17 @@ services:
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hr -d hr"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   input-service:
-    build: .
+    build: .                # соберёт слой только с jar
     restart: always
     depends_on:
-      db:
-        condition: service_healthy            # ждём, пока Postgres готов
+      - db
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/hr
       SPRING_DATASOURCE_USERNAME: hr
       SPRING_DATASOURCE_PASSWORD: hr
-      # при необходимости: SPRING_PROFILES_ACTIVE: prod
     ports: ["8080:8080"]
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+
+volumes:
+  pgdata:

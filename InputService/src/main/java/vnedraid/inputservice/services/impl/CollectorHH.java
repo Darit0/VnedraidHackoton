@@ -1,6 +1,7 @@
 package vnedraid.inputservice.services.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CollectorHH implements Collector {
 
     private final WebClient hhWebClient;
@@ -34,6 +36,7 @@ public class CollectorHH implements Collector {
     @Override
     @Scheduled(fixedDelayString = "${hh.delay.ms:180000}")   // каждые 3 мин
     public void collect() {
+        log.info("⏰ Collector tick!");
         props.getRequests().forEach(this::fetchAndSave);
     }
 
@@ -76,6 +79,8 @@ public class CollectorHH implements Collector {
                     .forEach(vacancyRepo::save);
 
             page++;
+            log.info("💾  saved: {} rows, page {}/{}",
+                    resp.getItems().size(), currentPage+1, totalPages);
         } while (page < totalPages);
     }
 

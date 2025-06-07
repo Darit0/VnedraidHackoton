@@ -18,6 +18,7 @@ public class HhWebConfig {
 
     @Bean
     public WebClient hhWebClient(ObjectMapper mapper, WebClient.Builder builder) {
+        System.out.println("=== USING CUSTOM JACKSON MAPPER: " + mapper.getFactory().isEnabled(com.fasterxml.jackson.core.json.JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS.mappedFeature()));
 
         return builder
                 .baseUrl("https://api.hh.ru")

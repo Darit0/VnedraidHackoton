@@ -1,5 +1,6 @@
 package vnedraid.inputservice.services.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,7 @@ public class CollectorHH implements Collector {
     private final WebClient hhWebClient;
     private final VacancyRepo vacancyRepo;
     private final MonitoringProps props;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Scheduled(fixedDelayString = "${hh.delay.ms:180000}")   // каждые 3 мин
@@ -42,32 +44,48 @@ public class CollectorHH implements Collector {
     }
 
     private void fetchAndSave(MonitoringProps.Request rq) {
-
-        Mono<HhVacanciesResponse> mono = hhWebClient.get()
-                .uri(uri -> uri.path("/vacancies")
+        String rawJson = hhWebClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/vacancies")
                         .queryParam("text", rq.getText())
                         .queryParam("area", rq.getArea())
-                        .queryParam("page",0)
-                        .queryParam("per_page",50)
-                        .queryParam("no_magic","true")            // ← убираем хайлайты
+                        .queryParam("page", 0)
+                        .queryParam("per_page", 50)
+                        .queryParam("no_magic", "true")
                         .build())
                 .retrieve()
-                .bodyToMono(HhVacanciesResponse.class);
-
-        HhVacanciesResponse resp = mono
-                .retryWhen(Retry.fixedDelay(1, Duration.ofMinutes(1))
-                        .filter(WebClientRequestException.class::isInstance))
-                .doOnError(e -> log.warn("⚠ hh decode failed: {}", e.getMessage()))
-                .onErrorReturn(new HhVacanciesResponse())
+                .bodyToMono(String.class)
+                .doOnError(e -> log.warn("⚠ hh request failed: {}", e.toString()))
+                .onErrorReturn("")
                 .block();
 
-        if (resp.getItems()==null) {
-            log.warn("⚠ empty items for '{}'", rq.getText());
+        if (rawJson == null || rawJson.isEmpty()) {
+            log.warn("⚠ HH returned empty body for '{}'", rq.getText());
             return;
         }
-        vacancyRepo.saveAll(
-                resp.getItems().stream().map(this::toEntity).toList());
-        log.info("💾 saved {}", resp.getItems().size());
+
+        // Удаляем все невалидные управляющие символы (защита от кривых JSON)
+        String cleanedJson = rawJson.replaceAll("[\\x00-\\x1F&&[^\\r\\n\\t]]", " ");
+
+        HhVacanciesResponse resp;
+        try {
+            resp = objectMapper.readValue(cleanedJson, HhVacanciesResponse.class);
+        } catch (Exception ex) {
+            log.warn("⚠ JSON parse error: {}", ex.toString());
+            return;
+        }
+
+        if (resp.getItems() == null) {
+            log.warn("⚠ HH returned no items for '{}'", rq.getText());
+            return;
+        }
+
+        resp.getItems().stream()
+                .map(this::toEntity)
+                .forEach(vacancyRepo::save);
+
+        log.info("💾 saved {} rows for query='{}' area={}",
+                resp.getItems().size(), rq.getText(), rq.getArea());
     }
 
 

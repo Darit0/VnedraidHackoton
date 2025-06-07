@@ -10,11 +10,16 @@ import java.util.UUID;
 @Entity
 @Table(name = "vacancies")
 public class Vacancy {
-    @Id                       private String id;
-    @Column(nullable=false)    private String name;
-    private String city;       private Integer salaryFrom;
-    private Integer salaryTo;  private String salaryCurrency;
-    private String gender;     private String age;
+    @Id
+    private String id;
+    @Column(nullable=false)
+    private String name;
+    private String city;
+    private Integer salaryFrom;
+    private Integer salaryTo;
+    private String salaryCurrency;
+    private String gender;
+    private String age;
     private Boolean requiresCar;
     private String experience; private String education;
     private String professionalRole;

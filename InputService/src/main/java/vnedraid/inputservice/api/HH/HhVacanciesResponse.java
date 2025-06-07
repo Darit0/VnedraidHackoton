@@ -10,8 +10,10 @@ public class HhVacanciesResponse {
     private List<Item> items;
 
     @Data public static class Item {
-        private String id;          private String name;
-        private Area area;          private Salary salary;
+        private String id;
+        private String name;
+        private Area area;
+        private Salary salary;
         private Experience experience;
         private List<ProfessionalRole> professional_roles;
         private String published_at;

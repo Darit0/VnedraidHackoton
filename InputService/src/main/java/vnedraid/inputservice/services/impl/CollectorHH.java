@@ -32,24 +32,65 @@ public class CollectorHH implements Collector {
     }
 
     private void fetchAndSave(MonitoringProps.Request rq) {
-        // 1. Запрашиваем только первую страницу, 50 вакансий
-        HhVacanciesResponse resp = hhWebClient.get()
+        log.info("⏰ HH Fetch for text='{}' area={}", rq.getText(), rq.getArea());
+
+        // Получаем ответ как массив байт (так и JSON, и GZIP можно обработать)
+        byte[] body = hhWebClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/vacancies")
                         .queryParam("text", rq.getText())
                         .queryParam("area", rq.getArea())
                         .queryParam("page", 0)
                         .queryParam("per_page", 50)
-                        .queryParam("no_magic", "true")
+                        .queryParam("no_magic", true)
                         .build())
                 .retrieve()
-                .bodyToMono(HhVacanciesResponse.class)
-                .doOnError(e -> log.warn("⚠ hh decode failed: {}", e.toString()))
-                .onErrorReturn(new HhVacanciesResponse()) // если парсинг провалился — пустая обёртка
+                .bodyToMono(byte[].class)
+                .doOnError(e -> log.warn("⚠ HH fetch failed: {}", e.toString()))
                 .block();
 
+        if (body == null || body.length == 0) {
+            log.warn("⚠ HH empty response for '{}'", rq.getText());
+            return;
+        }
+
+        String json;
+        try {
+            // Проверяем GZIP ли это (первая байта 0x1F == 31)
+            if (body[0] == (byte)0x1F) {
+                log.info("=== Detected GZIP, decompressing...");
+                try (java.util.zip.GZIPInputStream gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(body))) {
+                    json = new String(gis.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                }
+            } else {
+                json = new String(body, java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.warn("⚠ Decompress error: {}", e.toString());
+            return;
+        }
+
+        if (json.length() < 20) {
+            log.warn("⚠ HH returned too short data: '{}'", json);
+            return;
+        }
+
+        // Лог для отладки: покажи первые 500 символов ответа (или сколько нужно)
+        log.debug("=== HH JSON chunk: {}", json.substring(0, Math.min(json.length(), 500)));
+
+        // Парсим JSON в твой DTO
+        HhVacanciesResponse resp;
+        try {
+            // Используй свой кастомный ObjectMapper если надо
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            resp = mapper.readValue(json, HhVacanciesResponse.class);
+        } catch (Exception e) {
+            log.warn("⚠ JSON parse error: {}", e.toString());
+            return;
+        }
+
         if (resp.getItems() == null) {
-            log.warn("⚠ empty items for '{}'", rq.getText());
+            log.warn("⚠ HH returned no items for '{}'", rq.getText());
             return;
         }
 
@@ -57,9 +98,9 @@ public class CollectorHH implements Collector {
                 .map(this::toEntity)
                 .forEach(vacancyRepo::save);
 
-        log.info("💾 saved {} rows for query='{}' area={}",
-                resp.getItems().size(), rq.getText(), rq.getArea());
+        log.info("💾 saved {} rows for query='{}' area={}", resp.getItems().size(), rq.getText(), rq.getArea());
     }
+
 
     /** Маппинг DTO → Entity + простой regex-парсер */
     private Vacancy toEntity(HhVacanciesResponse.Item i) {

@@ -44,32 +44,30 @@ public class CollectorHH implements Collector {
     private void fetchAndSave(MonitoringProps.Request rq) {
 
         Mono<HhVacanciesResponse> mono = hhWebClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/vacancies")
+                .uri(uri -> uri.path("/vacancies")
                         .queryParam("text", rq.getText())
                         .queryParam("area", rq.getArea())
-                        .queryParam("page", 0)
-                        .queryParam("per_page", 50)
+                        .queryParam("page",0)
+                        .queryParam("per_page",50)
+                        .queryParam("no_magic","true")            // ← убираем хайлайты
                         .build())
                 .retrieve()
                 .bodyToMono(HhVacanciesResponse.class);
 
         HhVacanciesResponse resp = mono
-                .doOnError(e -> log.warn("⚠ hh decode failed: {}", e.toString()))
-                .onErrorReturn(new HhVacanciesResponse())   // пустая оболочка
-                .block();                                   // ← остаётся блокировка
+                .retryWhen(Retry.fixedDelay(1, Duration.ofMinutes(1))
+                        .filter(WebClientRequestException.class::isInstance))
+                .doOnError(e -> log.warn("⚠ hh decode failed: {}", e.getMessage()))
+                .onErrorReturn(new HhVacanciesResponse())
+                .block();
 
-        if (resp.getItems() == null) {                      // защита от NPE
-            log.warn("⚠ HH returned no items for '{}'", rq.getText());
-            return;                                         // прерываем цикл
+        if (resp.getItems()==null) {
+            log.warn("⚠ empty items for '{}'", rq.getText());
+            return;
         }
-
-        resp.getItems().stream()
-                .map(this::toEntity)
-                .forEach(vacancyRepo::save);
-
-        log.info("💾 saved {} rows for query='{}' area={}",
-                resp.getItems().size(), rq.getText(), rq.getArea());
+        vacancyRepo.saveAll(
+                resp.getItems().stream().map(this::toEntity).toList());
+        log.info("💾 saved {}", resp.getItems().size());
     }
 
 

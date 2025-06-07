@@ -8,7 +8,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class JacksonConfig {
 
-    /** ObjectMapper, умеющий читать 0x1F */
+    /**
+     * ObjectMapper, умеющий читать 0x1F
+     */
     @Bean
     public ObjectMapper objectMapper() {
         return new ObjectMapper()

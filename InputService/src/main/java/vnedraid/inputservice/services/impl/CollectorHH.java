@@ -1,28 +1,17 @@
 package vnedraid.inputservice.services.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientRequestException;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Mono;
-import reactor.util.retry.Retry;
 import vnedraid.inputservice.api.HH.HhVacanciesResponse;
 import vnedraid.inputservice.api.HH.config.MonitoringProps;
 import vnedraid.inputservice.models.Vacancy;
 import vnedraid.inputservice.repo.VacancyRepo;
 import vnedraid.inputservice.services.Collector;
-import org.springframework.http.HttpStatusCode;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,17 +23,17 @@ public class CollectorHH implements Collector {
     private final WebClient hhWebClient;
     private final VacancyRepo vacancyRepo;
     private final MonitoringProps props;
-    private final ObjectMapper objectMapper;
 
     @Override
-    @Scheduled(fixedDelayString = "${hh.delay.ms:180000}")   // каждые 3 мин
+    @Scheduled(fixedDelayString = "${hh.delay.ms:180000}")
     public void collect() {
         log.info("⏰ Collector tick!");
         props.getRequests().forEach(this::fetchAndSave);
     }
 
     private void fetchAndSave(MonitoringProps.Request rq) {
-        String rawJson = hhWebClient.get()
+        // 1. Запрашиваем только первую страницу, 50 вакансий
+        HhVacanciesResponse resp = hhWebClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/vacancies")
                         .queryParam("text", rq.getText())
@@ -54,29 +43,13 @@ public class CollectorHH implements Collector {
                         .queryParam("no_magic", "true")
                         .build())
                 .retrieve()
-                .bodyToMono(String.class)
-                .doOnError(e -> log.warn("⚠ hh request failed: {}", e.toString()))
-                .onErrorReturn("")
+                .bodyToMono(HhVacanciesResponse.class)
+                .doOnError(e -> log.warn("⚠ hh decode failed: {}", e.toString()))
+                .onErrorReturn(new HhVacanciesResponse()) // если парсинг провалился — пустая обёртка
                 .block();
 
-        if (rawJson == null || rawJson.isEmpty()) {
-            log.warn("⚠ HH returned empty body for '{}'", rq.getText());
-            return;
-        }
-
-        // Удаляем все невалидные управляющие символы (защита от кривых JSON)
-        String cleanedJson = rawJson.replaceAll("[\\x00-\\x1F&&[^\\r\\n\\t]]", " ");
-
-        HhVacanciesResponse resp;
-        try {
-            resp = objectMapper.readValue(cleanedJson, HhVacanciesResponse.class);
-        } catch (Exception ex) {
-            log.warn("⚠ JSON parse error: {}", ex.toString());
-            return;
-        }
-
         if (resp.getItems() == null) {
-            log.warn("⚠ HH returned no items for '{}'", rq.getText());
+            log.warn("⚠ empty items for '{}'", rq.getText());
             return;
         }
 
@@ -88,68 +61,22 @@ public class CollectorHH implements Collector {
                 resp.getItems().size(), rq.getText(), rq.getArea());
     }
 
-
-//    private void fetchAndSave(MonitoringProps.Request rq) {
-//
-//        int page = 0;
-//        int totalPages;
-//
-//        do {
-//            /* --------------- 1. «Финальная» копия номера страницы --------------- */
-//            final int currentPage = page;  // теперь переменная в лямбде effectively-final
-//
-//            /* --------------- 2. Вызов hh.ru с обработкой ошибок и ретраями ----- */
-//            HhVacanciesResponse resp = hhWebClient.get()
-//                    .uri(uriBuilder -> uriBuilder
-//                            .path("/vacancies")
-//                            .queryParam("text",  rq.getText())
-//                            .queryParam("area",  rq.getArea())
-//                            .queryParam("page",  currentPage)
-//                            .queryParam("per_page", 10)
-//                            .build())
-//                    .retrieve()
-//                    /* → если пришёл любой 4xx/5xx — формируем исключение с телом ответа */
-//                    .onStatus(HttpStatusCode::isError, r ->
-//                            r.bodyToMono(String.class)
-//                                    .map(body ->
-//                                            new IllegalStateException("hh.ru error "
-//                                                    + r.statusCode() + " ➜ " + body)))  // ← map, НЕ flatMap!
-//                    .bodyToMono(HhVacanciesResponse.class)
-//                    /* → повторяем ТОЛЬКО при 5xx, экспоненциально 2 s → 4 s → 8 s */
-//                    .retryWhen(
-//                            Retry.backoff(3, Duration.ofSeconds(2))
-//                                    .filter(ex -> ex instanceof WebClientResponseException wce
-//                                            && wce.getStatusCode().is5xxServerError()))
-//                    .block();   // блокируем только в MVP
-//
-//            totalPages = resp.getPages();
-//            resp.getItems().stream()
-//                    .map(this::toEntity)
-//                    .forEach(vacancyRepo::save);
-//
-//            page++;
-//            log.info("💾  saved: {} rows, page {}/{}",
-//                    resp.getItems().size(), currentPage+1, totalPages);
-//        } while (page < totalPages);
-//    }
-
-
     /** Маппинг DTO → Entity + простой regex-парсер */
     private Vacancy toEntity(HhVacanciesResponse.Item i) {
         return Vacancy.builder()
                 .id(i.getId())
                 .name(i.getName())
                 .city(i.getArea().getName())
-                .salaryFrom(i.getSalary()==null ? null : i.getSalary().getFrom())
-                .salaryTo(i.getSalary()==null ? null : i.getSalary().getTo())
-                .salaryCurrency(i.getSalary()==null ? null : i.getSalary().getCurrency())
+                .salaryFrom(i.getSalary() == null ? null : i.getSalary().getFrom())
+                .salaryTo(i.getSalary() == null ? null : i.getSalary().getTo())
+                .salaryCurrency(i.getSalary() == null ? null : i.getSalary().getCurrency())
                 .experience(i.getExperience().getName())
                 .professionalRole(firstRole(i))
-                .requiresCar(hasCar(i.getDescription()))          // ← новая логика
+                .requiresCar(hasCar(i.getDescription()))
                 .gender(hasGender(i.getDescription()) ? "указан" : "")
                 .age(extractAge(i.getDescription()))
                 .description(i.getDescription())
-                .publishedAt(                                      // ← разбор даты через OffsetDateTime
+                .publishedAt(
                         OffsetDateTime.parse(i.getPublished_at())
                                 .toLocalDateTime())
                 .build();
@@ -158,9 +85,6 @@ public class CollectorHH implements Collector {
     private String firstRole(HhVacanciesResponse.Item i){
         return i.getProfessional_roles().isEmpty()? null :
                 i.getProfessional_roles().get(0).getName();
-    }
-    private boolean regex(String pat, String html){
-        return html!=null && Pattern.compile(pat, Pattern.CASE_INSENSITIVE).matcher(html).find();
     }
 
     private static final Pattern CAR_PATTERN    = Pattern.compile("(автомобил[ья]|машин[аы])",
@@ -178,6 +102,4 @@ public class CollectorHH implements Collector {
     }
     private boolean match(Pattern p, String html){ return p.matcher(nullSafe(html)).find(); }
     private String nullSafe(String s){ return s == null ? "" : s; }
-
 }
-

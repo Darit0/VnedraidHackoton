@@ -1,10 +1,8 @@
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# jar и конфиг внутри текущей папки
+
 COPY target/InputService-0.0.1-SNAPSHOT.jar app.jar
-# если нужен application.yml – раскомментируйте:
-# COPY src/main/resources/application.yml .
 
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
 EXPOSE 8080

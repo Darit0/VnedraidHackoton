@@ -13,7 +13,6 @@ import vnedraid.inputservice.services.Collector;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -82,7 +81,7 @@ public class CollectorHH implements Collector {
                 .gender(hasGender(i.getDescription()) ? "указан" : "")
                 .age(extractAge(i.getDescription()))
                 .description(i.getDescription())
-                .publishedAt(parsePublishedAt(i.getPublished_at())) // <-- исправление тут
+                .publishedAt(parsePublishedAt(i.getPublished_at()))
                 .build();
     }
 

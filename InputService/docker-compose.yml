@@ -1,27 +1,19 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16
-    restart: always
     environment:
       POSTGRES_DB: hr
       POSTGRES_USER: hr
       POSTGRES_PASSWORD: hr
     ports: ["5432:5432"]
-    volumes:
-      - pgdata:/var/lib/postgresql/data
 
   input-service:
-    build: .                # соберёт слой только с jar
-    restart: always
-    depends_on:
-      - db
+    build:
+      context: .
+      dockerfile: dockerfile
+    depends_on: [ db ]
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/hr
       SPRING_DATASOURCE_USERNAME: hr
       SPRING_DATASOURCE_PASSWORD: hr
     ports: ["8080:8080"]
-
-volumes:
-  pgdata:

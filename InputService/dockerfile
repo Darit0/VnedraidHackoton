@@ -1,12 +1,11 @@
-# Используем только рантайм-слой JDK 21
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Копируем предварительно собранный jar
-COPY InputService-*.jar app.jar
+# jar и конфиг внутри текущей папки
+COPY target/InputService-0.0.1-SNAPSHOT.jar app.jar
+# если нужен application.yml – раскомментируйте:
+# COPY src/main/resources/application.yml .
 
-# (опционально) выставляем лимиты JVM
 ENV JAVA_OPTS="-Xms256m -Xmx512m"
-
 EXPOSE 8080
 ENTRYPOINT ["sh","-c","java $JAVA_OPTS -jar /app/app.jar"]

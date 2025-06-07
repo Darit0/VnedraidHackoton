@@ -5,15 +5,18 @@ spring:
     password: hr
   jpa:
     hibernate:
-      ddl-auto: update        # MVP-????? (??????? ??????? ?????????????)
+      ddl-auto: update
     show-sql: true
+logging:
+  level:
+    root: INFO
+    vnedraid.inputservice: DEBUG
+    reactor.netty.http.client: DEBUG
 
 hh:
   delay:
-    ms: 180000                # 3 ???
+    ms: 300000                # 5
   monitoring:
     requests:
       - text: "Java developer"
-        area: 1               # ??????
-      - text: "QA engineer"
-        area: 113             # ???
+        area: 1

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -42,47 +43,79 @@ public class CollectorHH implements Collector {
 
     private void fetchAndSave(MonitoringProps.Request rq) {
 
-        int page = 0;
-        int totalPages;
+        Mono<HhVacanciesResponse> mono = hhWebClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/vacancies")
+                        .queryParam("text", rq.getText())
+                        .queryParam("area", rq.getArea())
+                        .queryParam("page", 0)
+                        .queryParam("per_page", 50)
+                        .build())
+                .retrieve()
+                .bodyToMono(HhVacanciesResponse.class);
 
-        do {
-            /* --------------- 1. «Финальная» копия номера страницы --------------- */
-            final int currentPage = page;  // теперь переменная в лямбде effectively-final
+        HhVacanciesResponse resp = mono
+                .doOnError(e -> log.warn("⚠ hh decode failed: {}", e.toString()))
+                .onErrorReturn(new HhVacanciesResponse())   // пустая оболочка
+                .block();                                   // ← остаётся блокировка
 
-            /* --------------- 2. Вызов hh.ru с обработкой ошибок и ретраями ----- */
-            HhVacanciesResponse resp = hhWebClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .path("/vacancies")
-                            .queryParam("text",  rq.getText())
-                            .queryParam("area",  rq.getArea())
-                            .queryParam("page",  currentPage)
-                            .queryParam("per_page", 100)
-                            .build())
-                    .retrieve()
-                    /* → если пришёл любой 4xx/5xx — формируем исключение с телом ответа */
-                    .onStatus(HttpStatusCode::isError, r ->
-                            r.bodyToMono(String.class)
-                                    .map(body ->
-                                            new IllegalStateException("hh.ru error "
-                                                    + r.statusCode() + " ➜ " + body)))  // ← map, НЕ flatMap!
-                    .bodyToMono(HhVacanciesResponse.class)
-                    /* → повторяем ТОЛЬКО при 5xx, экспоненциально 2 s → 4 s → 8 s */
-                    .retryWhen(
-                            Retry.backoff(3, Duration.ofSeconds(2))
-                                    .filter(ex -> ex instanceof WebClientResponseException wce
-                                            && wce.getStatusCode().is5xxServerError()))
-                    .block();   // блокируем только в MVP
+        if (resp.getItems() == null) {                      // защита от NPE
+            log.warn("⚠ HH returned no items for '{}'", rq.getText());
+            return;                                         // прерываем цикл
+        }
 
-            totalPages = resp.getPages();
-            resp.getItems().stream()
-                    .map(this::toEntity)
-                    .forEach(vacancyRepo::save);
+        resp.getItems().stream()
+                .map(this::toEntity)
+                .forEach(vacancyRepo::save);
 
-            page++;
-            log.info("💾  saved: {} rows, page {}/{}",
-                    resp.getItems().size(), currentPage+1, totalPages);
-        } while (page < totalPages);
+        log.info("💾 saved {} rows for query='{}' area={}",
+                resp.getItems().size(), rq.getText(), rq.getArea());
     }
+
+
+//    private void fetchAndSave(MonitoringProps.Request rq) {
+//
+//        int page = 0;
+//        int totalPages;
+//
+//        do {
+//            /* --------------- 1. «Финальная» копия номера страницы --------------- */
+//            final int currentPage = page;  // теперь переменная в лямбде effectively-final
+//
+//            /* --------------- 2. Вызов hh.ru с обработкой ошибок и ретраями ----- */
+//            HhVacanciesResponse resp = hhWebClient.get()
+//                    .uri(uriBuilder -> uriBuilder
+//                            .path("/vacancies")
+//                            .queryParam("text",  rq.getText())
+//                            .queryParam("area",  rq.getArea())
+//                            .queryParam("page",  currentPage)
+//                            .queryParam("per_page", 10)
+//                            .build())
+//                    .retrieve()
+//                    /* → если пришёл любой 4xx/5xx — формируем исключение с телом ответа */
+//                    .onStatus(HttpStatusCode::isError, r ->
+//                            r.bodyToMono(String.class)
+//                                    .map(body ->
+//                                            new IllegalStateException("hh.ru error "
+//                                                    + r.statusCode() + " ➜ " + body)))  // ← map, НЕ flatMap!
+//                    .bodyToMono(HhVacanciesResponse.class)
+//                    /* → повторяем ТОЛЬКО при 5xx, экспоненциально 2 s → 4 s → 8 s */
+//                    .retryWhen(
+//                            Retry.backoff(3, Duration.ofSeconds(2))
+//                                    .filter(ex -> ex instanceof WebClientResponseException wce
+//                                            && wce.getStatusCode().is5xxServerError()))
+//                    .block();   // блокируем только в MVP
+//
+//            totalPages = resp.getPages();
+//            resp.getItems().stream()
+//                    .map(this::toEntity)
+//                    .forEach(vacancyRepo::save);
+//
+//            page++;
+//            log.info("💾  saved: {} rows, page {}/{}",
+//                    resp.getItems().size(), currentPage+1, totalPages);
+//        } while (page < totalPages);
+//    }
 
 
     /** Маппинг DTO → Entity + простой regex-парсер */

@@ -21,7 +21,6 @@ public class WebClientConfig {
                             .jackson2JsonDecoder(new Jackson2JsonDecoder(objectMapper));
                     clientCodecConfigurer.defaultCodecs()
                             .jackson2JsonEncoder(new Jackson2JsonEncoder(objectMapper));
-                    // НЕ НАДО вручную подсовывать декодер gzip!
                 })
                 .build();
     }

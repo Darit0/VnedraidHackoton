@@ -1,7 +1,6 @@
 package vnedraid.inputservice.services.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,62 +13,120 @@ import vnedraid.inputservice.services.Collector;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.util.Map;
 import java.util.StringJoiner;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class CollectorHH implements Collector {
 
-    private static final int PAGE_SIZE = 50;          // собираем ровно 50 штук
-    private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+    /* ---------- константы ---------- */
+
+    private static final int  PAGE_SIZE        = 50;      // сколько тащим за раз
+    private static final int  MAX_PAGES_LOOKUP = 100;     // safety-ограничение цикла
+
+    /** Принимает +03:00, +0300, +03, Z */
+    private static final DateTimeFormatter HH_DT = new DateTimeFormatterBuilder()
+            .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .optionalStart().appendPattern("XXX").optionalEnd()   // +03:00
+            .optionalStart().appendPattern("XX").optionalEnd()    // +0300
+            .optionalStart().appendPattern("X").optionalEnd()     // +03
+            .optionalStart().appendLiteral('Z').optionalEnd()     // Z
+            .toFormatter();
+
+    /* ---------- DI ---------- */
 
     private final WebClient       hhWebClient;
     private final MonitoringProps props;
-    private final ObjectMapper    mapper;
     private final VacancyRepo     repo;
 
-    /** вызов раз в минуту (60000 мс по умолчанию) */
+    /* ---------- state ---------- */
+
+    /** для каждой (text|area) запоминаем, с какой страницы продолжать */
+    private final Map<String, Integer> nextPage = new ConcurrentHashMap<>();
+
+    /* ---------- public ---------- */
+
+    /** раз в минуту (значение по умолчанию) */
     @Override
     @Scheduled(fixedDelayString = "${hh.delay.ms:60000}")
     public void collect() {
-        props.getRequests().forEach(this::loadPage0);
+        props.getRequests().forEach(this::loadNewPortion);
     }
 
-    /** тянем только первую страницу (page = 0) по 50 вакансий */
-    private void loadPage0(MonitoringProps.Request rq) {
-        log.info("▶ HH collect text='{}' area={}", rq.getText(), rq.getArea());
+    /* ---------- private ---------- */
 
-        JsonNode root = hhWebClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/vacancies")
-                        .queryParam("text",         rq.getText())
-                        .queryParam("area",         rq.getArea())
-                        .queryParam("page",         0)
-                        .queryParam("per_page",     PAGE_SIZE)
-                        .queryParam("order_by",     "publication_time")
-                        .build())
-                .retrieve()
-                .bodyToMono(JsonNode.class)
-                .block();
+    /** грузим 50 уникальных записей, начиная с «своей» страницы */
+    private void loadNewPortion(MonitoringProps.Request rq) {
 
-        if (root == null || !root.has("items") || root.get("items").isEmpty()) return;
+        final String key = rq.getText() + "|" + rq.getArea();
+        int page        = nextPage.getOrDefault(key, 0);
+        int inserted    = 0;
+        int pagesTried  = 0;
+        int totalPages  = Integer.MAX_VALUE;   // узнаем позже с первого ответа
 
-        int upserts = 0;
-        for (JsonNode item : root.get("items")) {
-            try {
-                Vacancy v = map(item);
-                repo.save(v);
-                upserts++;
-            } catch (Exception e) {
-                log.warn("✖ parse id={} : {}", item.path("id").asText(), e.getMessage());
+        log.info("▶ HH collect '{}', area={} — start page={}", rq.getText(), rq.getArea(), page);
+
+        while (inserted < PAGE_SIZE && pagesTried < MAX_PAGES_LOOKUP && page < totalPages) {
+            int currentPage = page;
+            JsonNode root = hhWebClient.get()
+                    .uri(uriBuilder -> uriBuilder.path("/vacancies")
+                            .queryParam("text",     rq.getText())
+                            .queryParam("area",     rq.getArea())
+                            .queryParam("page",     currentPage)
+                            .queryParam("per_page", PAGE_SIZE)
+                            .queryParam("order_by", "publication_time")
+                            .queryParam("fields",   "driver_license_types")
+                            .build())
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            if (root == null || !root.has("items") || root.get("items").isEmpty()) break;
+
+            // total number of pages для safety-цикла
+            totalPages = root.path("pages").asInt(Integer.MAX_VALUE);
+
+            for (JsonNode item : root.get("items")) {
+
+                String id = item.path("id").asText();
+                if (repo.existsById(id)) continue;            // уже есть → пропускаем
+
+                try {
+                    Vacancy v = map(item);
+                    repo.save(v);
+                    inserted++;
+
+                    if (inserted == PAGE_SIZE) break;         // набрали порцию
+                } catch (Exception e) {
+                    log.warn("✖ parse id={} : {}", id, e.getMessage());
+                }
             }
+
+            page++;
+            pagesTried++;
         }
-        log.info("✅ upserted {} records", upserts);
+
+        /* запоминаем, с какой страницы продолжить */
+        nextPage.put(key, (page >= totalPages) ? 0 : page);
+
+        log.info("✅ '{}' area={} — saved {} new vacancies; next start page={}",
+                rq.getText(), rq.getArea(), inserted, nextPage.get(key));
     }
 
-    /** маппинг JSON → Entity (только нужные поля) */
+    /* ---------- маппинг ---------- */
+
     private Vacancy map(JsonNode n) {
         JsonNode salary = n.path("salary");
+
+        // driver license
+        String dlCategories = joinLicenseCategories(n.path("driver_license_types"));
+        if (dlCategories == null) {
+            dlCategories = fetchDlFromVacancy(n.path("id").asText());
+        }
 
         return Vacancy.builder()
                 .id(n.path("id").asText())
@@ -78,15 +135,33 @@ public class CollectorHH implements Collector {
                 .employer(n.path("employer").path("name").asText(null))
                 .salaryFrom(getIntOrNull(salary, "from"))
                 .salaryTo(getIntOrNull(salary, "to"))
-                .currency(salary.isMissingNode() || salary.isNull() ? null : salary.path("currency").asText(null))
+                .currency(salary.isMissingNode() || salary.isNull()
+                        ? null
+                        : salary.path("currency").asText(null))
                 .carRequired(getBooleanOrNull(n, "car_own"))
-                .driverLicenseCategories(joinLicenseCategories(n.path("driver_license_types")))
+                .driverLicenseCategories(dlCategories)
                 .schedule(n.path("schedule").path("name").asText(null))
                 .publishedAt(parseDate(n.path("published_at").asText(null)))
                 .build();
     }
 
-    /* ---------- util ---------- */
+    /* ---------- helpers ---------- */
+
+    private String fetchDlFromVacancy(String id) {
+        try {
+            JsonNode detail = hhWebClient.get()
+                    .uri("/vacancies/{id}", id)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            return detail == null ? null
+                    : joinLicenseCategories(detail.path("driver_license_types"));
+        } catch (Exception e) {
+            log.debug("⚠ не удалось загрузить driver_license_types для id={}: {}", id, e.toString());
+            return null;
+        }
+    }
 
     private Integer getIntOrNull(JsonNode node, String field) {
         return node.isMissingNode() || node.isNull() || node.path(field).isMissingNode()
@@ -106,6 +181,6 @@ public class CollectorHH implements Collector {
     }
 
     private OffsetDateTime parseDate(String iso) {
-        return iso == null ? null : OffsetDateTime.parse(iso, ISO);
+        return iso == null ? null : OffsetDateTime.parse(iso, HH_DT);
     }
 }

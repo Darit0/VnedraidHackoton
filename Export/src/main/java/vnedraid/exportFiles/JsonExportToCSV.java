@@ -4,18 +4,17 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import vnedraid.Data.JobData;
 
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class JsonExportToCSV {
 
     public void interpritatorCSV(String jsonInput) {
         try {
-            // Пример входного JSON
-            //String jsonInput = "[{\"jobTitle\": \"Доставщик\", \"city\": \"Москва\", \"experience\": [\"from1To3\", \"from3To6\"], \"age\": [\"age18_30\"], \"source\": [\"hh\"], \"education\": \"higher\", \"workFormat\": [\"remotely\", \"onSite\"], \"car\": true, \"license\": [\"B\", \"C\"]}]";
-
             ObjectMapper objectMapper = new ObjectMapper();
             List<JobData> jobList = objectMapper.readValue(jsonInput, new TypeReference<List<JobData>>() {});
 
@@ -27,7 +26,12 @@ public class JsonExportToCSV {
     }
 
     public static void exportToCsv(List<JobData> jobs, String fileName) throws IOException {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(fileName))) {
+        try (PrintWriter writer = new PrintWriter(
+                new OutputStreamWriter(new FileOutputStream(fileName), StandardCharsets.UTF_8))) {
+
+            // Добавляем BOM для корректного открытия в Excel
+            writer.print('\uFEFF');
+
             // Заголовок CSV
             writer.println("jobTitle,city,experience,age,source,education,workFormat,car,license");
 
@@ -48,6 +52,7 @@ public class JsonExportToCSV {
     }
 
     private static String quote(String s) {
+        if (s == null) return "\"\"";
         return "\"" + s.replace("\"", "\"\"") + "\"";
     }
 }

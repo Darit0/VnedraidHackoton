@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hr
+    username: hr
+    password: hr
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+logging:
+  level:
+    root: DEBUG
+    vnedraid.inputservice: DEBUG
+    reactor.netty.http.client: DEBUG
+
+hh:
+  delay:
+    ms: 60000
+  monitoring:
+    requests:
+      - text: "Java Developer"
+        area: 1
+      - text: "Курьер"
+        area: 1

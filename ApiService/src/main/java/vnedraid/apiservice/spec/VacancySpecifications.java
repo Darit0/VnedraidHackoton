@@ -20,10 +20,6 @@ public final class VacancySpecifications {
 
     private VacancySpecifications() {}
 
-    /* ------------------------------------------------------------------ */
-    /* утилита: глубокий URL-decode (та же логика, что и в контроллере)   */
-    /* ------------------------------------------------------------------ */
-
     private static final Charset UTF8 = StandardCharsets.UTF_8;
 
     private static String urlDeepDecode(String raw) {
@@ -39,10 +35,6 @@ public final class VacancySpecifications {
             }
         }
     }
-
-    /* ------------------------------------------------------------------ */
-    /* простые поля                                                       */
-    /* ------------------------------------------------------------------ */
 
     /** city = ? (полное совпадение) */
     public static Specification<Vacancy> cityEquals(String city) {
@@ -90,10 +82,6 @@ public final class VacancySpecifications {
                         : cb.equal(root.get("carRequired"), needCar);
     }
 
-    /* ------------------------------------------------------------------ */
-    /* work-format                                                        */
-    /* ------------------------------------------------------------------ */
-
     private static final Map<String, String> WF_MAP = Map.of(
             "onSite",   "Полный день",
             "remotely", "Удаленная работа",
@@ -115,10 +103,6 @@ public final class VacancySpecifications {
         };
     }
 
-    /* ------------------------------------------------------------------ */
-    /* водительские права                                                 */
-    /* ------------------------------------------------------------------ */
-
     /** driverLicenseCategories содержит ХОТЯ БЫ одну из переданных */
     public static Specification<Vacancy> anyLicense(Set<String> cats) {
         return (root, q, cb) -> {
@@ -132,10 +116,6 @@ public final class VacancySpecifications {
             return p;
         };
     }
-
-    /* ------------------------------------------------------------------ */
-    /* заглушка под experience, если понадобится позже                    */
-    /* ------------------------------------------------------------------ */
 
     public static Specification<Vacancy> experienceIn(List<String> exp) {
         return (root, q, cb) -> cb.conjunction();

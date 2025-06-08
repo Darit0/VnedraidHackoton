@@ -19,15 +19,13 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/v1/vacancies")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")          // при необходимости ограничьте
+@CrossOrigin(origins = "*")
 public class VacancyController {
 
     private static final Charset UTF8 = StandardCharsets.UTF_8;
 
     private final VacancyRepo   repo;
     private final VacancyMapper mapper;
-
-    /* -------------------------- paging -------------------------- */
 
     @GetMapping
     public List<VacancyDto> findAll(
@@ -39,8 +37,6 @@ public class VacancyController {
 
         return p.stream().map(mapper::toDto).toList();
     }
-
-    /* -------------------------- поиск по свободной строке -------------------------- */
 
     @GetMapping("/search")
     public List<VacancyDto> search(
@@ -55,8 +51,6 @@ public class VacancyController {
         return repo.findAll(spec, pg).stream().map(mapper::toDto).toList();
     }
 
-    /* -------------------------- util: «глубокий» URL-decode -------------------------- */
-
     private static String urlDeepDecode(String raw) {
         if (raw == null) return null;
 
@@ -64,20 +58,18 @@ public class VacancyController {
         while (true) {
             try {
                 String dec = URLDecoder.decode(prev, UTF8);
-                if (dec.equals(prev)) return dec;      // дальше нечего декодировать
+                if (dec.equals(prev)) return dec;
                 prev = dec;
-            } catch (IllegalArgumentException ex) {    // оборванный «%»
-                return prev;                           // что смогли – то вернём
+            } catch (IllegalArgumentException ex) {
+                return prev;
             }
         }
     }
 
-    /* -------------------------- фильтр -------------------------- */
-
     @GetMapping("/filter")
     public List<VacancyDto> filter(
-            @RequestParam                 String jobTitle,        // ОБЯЗАТЕЛЬНЫЙ
-            @RequestParam(required = false) String city,          // неснимаемый (если есть)
+            @RequestParam                 String jobTitle,
+            @RequestParam(required = false) String city,
 
             @RequestParam(required = false) Boolean car,
             @RequestParam(required = false) Set<String> workFormat,
@@ -86,27 +78,22 @@ public class VacancyController {
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        /* нормализуем вход прямо здесь, чтобы city сравнивался 1-к-1 */
         jobTitle = urlDeepDecode(jobTitle);
         city     = urlDeepDecode(city);
 
         Pageable pageable = PageRequest.of(
                 page, size, Sort.by(Sort.Direction.DESC, "publishedAt"));
 
-        /* обязательные условия: jobTitle     (всегда)
-                               + city         (если указан)               */
         Specification<Vacancy> mandatory = VacancySpecifications
                 .jobTitleContains(jobTitle)
                 .and(VacancySpecifications.cityEquals(city));
 
-        /* дополнительные (можем постепенно снимать) */
         List<Specification<Vacancy>> optional = List.of(
                 VacancySpecifications.workFormatIn(workFormat),
                 VacancySpecifications.carRequired(car),
                 VacancySpecifications.anyLicense(license)
         );
 
-        /* сначала — все фильтры; если пусто — снимаем по одному слева направо */
         for (int i = 0; i <= optional.size(); i++) {
             Specification<Vacancy> spec = mandatory;
             for (int j = 0; j < optional.size() - i; j++) {
@@ -122,6 +109,6 @@ public class VacancyController {
                 return data;
             }
         }
-        return List.of();   // практически недостижимо
+        return List.of();
     }
 }

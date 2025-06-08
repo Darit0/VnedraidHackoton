@@ -23,8 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class CollectorHH implements Collector {
 
-    /* ---------- константы ---------- */
-
     private static final int  PAGE_SIZE        = 50;
     private static final int  MAX_PAGES_LOOKUP = 100;
 
@@ -37,25 +35,17 @@ public class CollectorHH implements Collector {
             .optionalStart().appendLiteral('Z').optionalEnd()
             .toFormatter();
 
-    /* ---------- DI ---------- */
-
     private final WebClient       hhWebClient;
     private final MonitoringProps props;
     private final VacancyRepo     repo;
 
-    /* ---------- state ---------- */
-
     private final Map<String, Integer> nextPage = new ConcurrentHashMap<>();
-
-    /* ---------- public ---------- */
 
     @Override
     @Scheduled(fixedDelayString = "${hh.delay.ms:60000}")
     public void collect() {
         props.getRequests().forEach(this::loadNewPortion);
     }
-
-    /* ---------- private ---------- */
 
     private void loadNewPortion(MonitoringProps.Request rq) {
 
@@ -107,8 +97,6 @@ public class CollectorHH implements Collector {
                 rq.getText(), rq.getArea(), inserted, nextPage.get(key));
     }
 
-    /* ---------- mapping ---------- */
-
     private Vacancy map(JsonNode n) {
         JsonNode salary = n.path("salary");
 
@@ -134,8 +122,6 @@ public class CollectorHH implements Collector {
                 .publishedAt(parseDate(n.path("published_at").asText(null)))
                 .build();
     }
-
-    /* ---------- helpers ---------- */
 
     private String fetchDlFromVacancy(String id) {
         try {

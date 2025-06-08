@@ -7,8 +7,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication(
 		scanBasePackages = {
-				"vnedraid.apiservice",       // собственные контроллеры
-				"vnedraid.inputservice"      // модели, репозитории, сервисы
+				"vnedraid.apiservice",
+				"vnedraid.inputservice"
 		})
 @EntityScan("vnedraid.inputservice.models")
 @EnableJpaRepositories(basePackages = "vnedraid.inputservice.repo")

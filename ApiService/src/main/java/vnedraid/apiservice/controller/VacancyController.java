@@ -5,6 +5,7 @@ import org.springframework.data.domain.*;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.web.bind.annotation.*;
 import vnedraid.apiservice.dto.VacancyDto;
+import vnedraid.apiservice.dto.VacancyReportDto;
 import vnedraid.apiservice.mapper.VacancyMapper;
 import vnedraid.apiservice.spec.VacancySpecifications;
 import vnedraid.inputservice.models.Vacancy;
@@ -13,8 +14,8 @@ import vnedraid.inputservice.repo.VacancyRepo;
 import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/vacancies")
@@ -110,5 +111,106 @@ public class VacancyController {
             }
         }
         return List.of();
+    }
+    @GetMapping("/report")
+    public VacancyReportDto report(@RequestParam String jobTitle) {
+        String decoded = urlDeepDecode(jobTitle);
+        List<Vacancy> all = repo.findAll(
+                VacancySpecifications.jobTitleContains(decoded)
+        );
+
+        if (all.isEmpty()) {
+            return new VacancyReportDto(
+                    0, 0, 0, 0, 0,
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap()
+            );
+        }
+
+        DoubleSummaryStatistics fromStats = all.stream()
+                .map(Vacancy::getSalaryFrom)
+                .filter(Objects::nonNull)
+                .mapToDouble(Integer::doubleValue)
+                .summaryStatistics();
+
+        DoubleSummaryStatistics toStats = all.stream()
+                .map(Vacancy::getSalaryTo)
+                .filter(Objects::nonNull)
+                .mapToDouble(Integer::doubleValue)
+                .summaryStatistics();
+
+        double avgFrom = fromStats.getCount() > 0 ? fromStats.getAverage() : 0;
+        double avgTo   = toStats.getCount()   > 0 ? toStats.getAverage()   : 0;
+
+        List<Double> mids = all.stream()
+                .map(v -> {
+                    Integer f = v.getSalaryFrom();
+                    Integer t = v.getSalaryTo();
+                    if (f != null && t != null)      return (f + t) / 2.0;
+                    if (f != null)                   return f.doubleValue();
+                    if (t != null)                   return t.doubleValue();
+                    return null;
+                })
+                .filter(Objects::nonNull)
+                .sorted()
+                .collect(Collectors.toList());
+
+        double avgTotal = mids.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(0);
+
+        double median;
+        int n = mids.size();
+        if (n % 2 == 1) {
+            median = mids.get(n/2);
+        } else {
+            median = (mids.get(n/2 - 1) + mids.get(n/2)) / 2.0;
+        }
+
+        Map<Integer, Long> histogram = mids.stream()
+                .map(Double::intValue)
+                .collect(Collectors.groupingBy(i -> i, Collectors.counting()));
+
+        Map<String, List<Double>> bySchedule = all.stream()
+                .filter(v -> v.getSchedule() != null)
+                .collect(Collectors.groupingBy(
+                        Vacancy::getSchedule,
+                        Collectors.mapping(v -> {
+                            Integer f = v.getSalaryFrom();
+                            Integer t = v.getSalaryTo();
+                            if (f != null && t != null)      return (f + t) / 2.0;
+                            if (f != null)                   return f.doubleValue();
+                            if (t != null)                   return t.doubleValue();
+                            return null;
+                        }, Collectors.filtering(Objects::nonNull, Collectors.toList()))
+                ));
+
+        Map<String, Long> scheduleCounts = bySchedule.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> (long) e.getValue().size()
+                ));
+
+        Map<String, Double> avgBySchedule = bySchedule.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().stream()
+                                .mapToDouble(Double::doubleValue)
+                                .average()
+                                .orElse(0)
+                ));
+
+        return new VacancyReportDto(
+                avgFrom,
+                avgTo,
+                avgTotal,
+                median,
+                all.size(),
+                histogram,
+                scheduleCounts,
+                avgBySchedule
+        );
     }
 }

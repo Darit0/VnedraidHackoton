@@ -2,15 +2,14 @@ package vnedraid.exportFiles;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
 import vnedraid.Data.JobData;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
+
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-
+@Service
 public class JsonExportToCSV {
 
     public void interpritatorCSV(String jsonInput) {
@@ -25,18 +24,28 @@ public class JsonExportToCSV {
         }
     }
 
-    public static void exportToCsv(List<JobData> jobs, String fileName) throws IOException {
-        try (PrintWriter writer = new PrintWriter(
-                new OutputStreamWriter(new FileOutputStream(fileName), StandardCharsets.UTF_8))) {
+    public void exportCsvFromString(String jsonInput, java.io.Writer writer) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+        List<JobData> jobList = objectMapper.readValue(jsonInput, new TypeReference<List<JobData>>() {});
+        exportToCsv(jobList, writer);
+    }
 
-            // Добавляем BOM для корректного открытия в Excel
-            writer.print('\uFEFF');
+    // Перегруженный метод для записи в файл
+    public void exportToCsv(List<JobData> jobs, String fileName) throws IOException {
+        try (Writer writer = new OutputStreamWriter(
+                new FileOutputStream(fileName), StandardCharsets.UTF_8)) {
+            exportToCsv(jobs, writer); // вызываем существующий метод
+        }
+    }
 
-            // Заголовок CSV
-            writer.println("jobTitle,city,experience,age,source,education,workFormat,car,license");
+    public static void exportToCsv(List<JobData> jobs, java.io.Writer writer) throws IOException {
+        try (PrintWriter pw = new PrintWriter(writer)) {
+            pw.print('\uFEFF'); // Добавляем BOM для корректного открытия в Excel
+            //заголовки
+            pw.println("jobTitle,city,experience,age,source,education,workFormat,car,license");
 
             for (JobData job : jobs) {
-                writer.println(String.join(",",
+                pw.println(String.join(",",
                         quote(job.getJobTitle()),
                         quote(job.getCity()),
                         quote(String.join(";", job.getExperience())),

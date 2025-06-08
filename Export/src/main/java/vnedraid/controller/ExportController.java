@@ -3,10 +3,13 @@ package vnedraid.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 import vnedraid.exportFiles.JsonExportToCSV;
 
 import java.io.IOException;
 import java.io.StringWriter;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api/v1/vacancies")
@@ -15,35 +18,51 @@ import java.io.StringWriter;
 public class ExportController {
 
     private final JsonExportToCSV jsonExportToCSV;
+    private final RestTemplate restTemplate = new RestTemplate();
 
     @GetMapping("/export")
-    public ResponseEntity<String> exportVacancies(@RequestParam String vacancyJson) {
+    public ResponseEntity<String> exportVacancies(
+            @RequestParam String jobTitle,
+            @RequestParam String city) {
+
         try {
-            // Создаем StringWriter для хранения CSV в памяти
+            // Формируем URL с закодированными параметрами
+            String encodedJobTitle = URLEncoder.encode(jobTitle, StandardCharsets.UTF_8);
+            String encodedCity = URLEncoder.encode(city, StandardCharsets.UTF_8);
+
+            String filterUrl = "http://localhost:8081/api/v1/vacancies/filter?jobTitle=" +
+                    encodedJobTitle + "&city=" + encodedCity;
+
+            // Отправляем GET-запрос и получаем JSON-ответ
+            ResponseEntity<String> response = restTemplate.getForEntity(filterUrl, String.class);
+
+            if (response.getStatusCode() != HttpStatus.OK) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("Ошибка при получении данных: " + response.getStatusCode());
+            }
+
+            String jsonResponse = response.getBody();
+
+            // Экспортируем JSON в CSV
             StringWriter stringWriter = new StringWriter();
+            jsonExportToCSV.exportCsvFromString(jsonResponse, stringWriter);
 
-            // Преобразуем JSON в CSV и записываем в StringWriter
-            jsonExportToCSV.exportCsvFromString(vacancyJson, stringWriter);
-
-            // Формируем заголовки для скачивания файла
+            // Подготавливаем заголовки для скачивания CSV
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(new MediaType("text", "csv"));
+            headers.setContentType(MediaType.parseMediaType("text/csv"));
             headers.setContentDisposition(
                     ContentDisposition.builder("attachment")
                             .filename("jobs.csv")
                             .build()
             );
 
-            // Возвращаем CSV в теле ответа
             return ResponseEntity.ok()
                     .headers(headers)
                     .body(stringWriter.toString());
 
-        } catch (IOException e) {
-            // Возвращаем ошибку в случае исключения
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Ошибка при экспорте в CSV: " + e.getMessage());
         }
     }
-
 }

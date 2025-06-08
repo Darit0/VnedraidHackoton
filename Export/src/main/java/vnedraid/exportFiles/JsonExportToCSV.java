@@ -11,10 +11,10 @@ import java.util.List;
 
 public class JsonExportToCSV {
 
-    public void interpritatorCSV() {
+    public void interpritatorCSV(String jsonInput) {
         try {
             // Пример входного JSON
-            String jsonInput = "[{\"jobTitle\": \"Доставщик\", \"city\": \"Москва\", \"experience\": [\"from1To3\", \"from3To6\"], \"age\": [\"age18_30\"], \"source\": [\"hh\"], \"education\": \"higher\", \"workFormat\": [\"remotely\", \"onSite\"], \"car\": true, \"license\": [\"B\", \"C\"]}]";
+            //String jsonInput = "[{\"jobTitle\": \"Доставщик\", \"city\": \"Москва\", \"experience\": [\"from1To3\", \"from3To6\"], \"age\": [\"age18_30\"], \"source\": [\"hh\"], \"education\": \"higher\", \"workFormat\": [\"remotely\", \"onSite\"], \"car\": true, \"license\": [\"B\", \"C\"]}]";
 
             ObjectMapper objectMapper = new ObjectMapper();
             List<JobData> jobList = objectMapper.readValue(jsonInput, new TypeReference<List<JobData>>() {});

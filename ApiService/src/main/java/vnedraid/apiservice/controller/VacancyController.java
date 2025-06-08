@@ -113,7 +113,15 @@ public class VacancyController {
         return List.of();
     }
     @GetMapping("/report")
-    public VacancyReportDto report(@RequestParam String jobTitle) {
+    public VacancyReportDto report(@RequestParam String jobTitle,
+                                   @RequestParam(required = false) String city,
+
+                                   @RequestParam(required = false) Boolean car,
+                                   @RequestParam(required = false) Set<String> workFormat,
+                                   @RequestParam(required = false) Set<String> license,
+
+                                   @RequestParam(defaultValue = "0")  int page,
+                                   @RequestParam(defaultValue = "20") int size) {
         String decoded = urlDeepDecode(jobTitle);
         List<Vacancy> all = repo.findAll(
                 VacancySpecifications.jobTitleContains(decoded)

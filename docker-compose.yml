@@ -9,11 +9,22 @@ services:
 
   input-service:
     build:
-      context: .
-      dockerfile: dockerfile
+      context: ./InputService
+      dockerfile: Dockerfile
     depends_on: [ db ]
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/hr
       SPRING_DATASOURCE_USERNAME: hr
       SPRING_DATASOURCE_PASSWORD: hr
     ports: ["8080:8080"]
+
+  api-service:
+    build:
+      context: ./ApiService
+      dockerfile: Dockerfile
+    depends_on: [ db ]
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/hr
+      SPRING_DATASOURCE_USERNAME: hr
+      SPRING_DATASOURCE_PASSWORD: hr
+    ports: [ "8081:8081" ]

@@ -25,16 +25,16 @@ public class CollectorHH implements Collector {
 
     /* ---------- константы ---------- */
 
-    private static final int  PAGE_SIZE        = 50;      // сколько тащим за раз
-    private static final int  MAX_PAGES_LOOKUP = 100;     // safety-ограничение цикла
+    private static final int  PAGE_SIZE        = 50;
+    private static final int  MAX_PAGES_LOOKUP = 100;
 
     /** Принимает +03:00, +0300, +03, Z */
     private static final DateTimeFormatter HH_DT = new DateTimeFormatterBuilder()
             .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
-            .optionalStart().appendPattern("XXX").optionalEnd()   // +03:00
-            .optionalStart().appendPattern("XX").optionalEnd()    // +0300
-            .optionalStart().appendPattern("X").optionalEnd()     // +03
-            .optionalStart().appendLiteral('Z').optionalEnd()     // Z
+            .optionalStart().appendPattern("XXX").optionalEnd()
+            .optionalStart().appendPattern("XX").optionalEnd()
+            .optionalStart().appendPattern("X").optionalEnd()
+            .optionalStart().appendLiteral('Z').optionalEnd()
             .toFormatter();
 
     /* ---------- DI ---------- */
@@ -45,12 +45,10 @@ public class CollectorHH implements Collector {
 
     /* ---------- state ---------- */
 
-    /** для каждой (text|area) запоминаем, с какой страницы продолжать */
     private final Map<String, Integer> nextPage = new ConcurrentHashMap<>();
 
     /* ---------- public ---------- */
 
-    /** раз в минуту (значение по умолчанию) */
     @Override
     @Scheduled(fixedDelayString = "${hh.delay.ms:60000}")
     public void collect() {
@@ -59,74 +57,66 @@ public class CollectorHH implements Collector {
 
     /* ---------- private ---------- */
 
-    /** грузим 50 уникальных записей, начиная с «своей» страницы */
     private void loadNewPortion(MonitoringProps.Request rq) {
 
         final String key = rq.getText() + "|" + rq.getArea();
         int page        = nextPage.getOrDefault(key, 0);
         int inserted    = 0;
         int pagesTried  = 0;
-        int totalPages  = Integer.MAX_VALUE;   // узнаем позже с первого ответа
+        int totalPages  = Integer.MAX_VALUE;
 
         log.info("▶ HH collect '{}', area={} — start page={}", rq.getText(), rq.getArea(), page);
 
         while (inserted < PAGE_SIZE && pagesTried < MAX_PAGES_LOOKUP && page < totalPages) {
             int currentPage = page;
             JsonNode root = hhWebClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/vacancies")
+                    .uri(u -> u.path("/vacancies")
                             .queryParam("text",     rq.getText())
                             .queryParam("area",     rq.getArea())
                             .queryParam("page",     currentPage)
                             .queryParam("per_page", PAGE_SIZE)
                             .queryParam("order_by", "publication_time")
-                            .queryParam("fields",   "driver_license_types")
+                            .queryParam("fields",   "driver_license_types,professional_roles")
                             .build())
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
 
-            if (root == null || !root.has("items") || root.get("items").isEmpty()) break;
+            if (root == null || root.path("items").isEmpty()) break;
 
-            // total number of pages для safety-цикла
             totalPages = root.path("pages").asInt(Integer.MAX_VALUE);
 
             for (JsonNode item : root.get("items")) {
 
                 String id = item.path("id").asText();
-                if (repo.existsById(id)) continue;            // уже есть → пропускаем
+                if (repo.existsById(id)) continue;
 
                 try {
-                    Vacancy v = map(item);
-                    repo.save(v);
+                    repo.save(map(item));
                     inserted++;
-
-                    if (inserted == PAGE_SIZE) break;         // набрали порцию
+                    if (inserted == PAGE_SIZE) break;
                 } catch (Exception e) {
                     log.warn("✖ parse id={} : {}", id, e.getMessage());
                 }
             }
-
-            page++;
-            pagesTried++;
+            page++; pagesTried++;
         }
 
-        /* запоминаем, с какой страницы продолжить */
         nextPage.put(key, (page >= totalPages) ? 0 : page);
-
         log.info("✅ '{}' area={} — saved {} new vacancies; next start page={}",
                 rq.getText(), rq.getArea(), inserted, nextPage.get(key));
     }
 
-    /* ---------- маппинг ---------- */
+    /* ---------- mapping ---------- */
 
     private Vacancy map(JsonNode n) {
         JsonNode salary = n.path("salary");
 
-        // driver license
         String dlCategories = joinLicenseCategories(n.path("driver_license_types"));
-        if (dlCategories == null) {
+        if (dlCategories == null)
             dlCategories = fetchDlFromVacancy(n.path("id").asText());
-        }
+
+        String profRoles    = joinProfessionalRoles(n.path("professional_roles"));
 
         return Vacancy.builder()
                 .id(n.path("id").asText())
@@ -136,10 +126,10 @@ public class CollectorHH implements Collector {
                 .salaryFrom(getIntOrNull(salary, "from"))
                 .salaryTo(getIntOrNull(salary, "to"))
                 .currency(salary.isMissingNode() || salary.isNull()
-                        ? null
-                        : salary.path("currency").asText(null))
+                        ? null : salary.path("currency").asText(null))
                 .carRequired(getBooleanOrNull(n, "car_own"))
                 .driverLicenseCategories(dlCategories)
+                .professionalRoles(profRoles)                 //  ←  НОВОЕ
                 .schedule(n.path("schedule").path("name").asText(null))
                 .publishedAt(parseDate(n.path("published_at").asText(null)))
                 .build();
@@ -154,19 +144,17 @@ public class CollectorHH implements Collector {
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
-
-            return detail == null ? null
+            return (detail == null) ? null
                     : joinLicenseCategories(detail.path("driver_license_types"));
         } catch (Exception e) {
-            log.debug("⚠ не удалось загрузить driver_license_types для id={}: {}", id, e.toString());
+            log.debug("⚠ can't load driver_license_types for id={}: {}", id, e.toString());
             return null;
         }
     }
 
     private Integer getIntOrNull(JsonNode node, String field) {
         return node.isMissingNode() || node.isNull() || node.path(field).isMissingNode()
-                ? null
-                : node.path(field).asInt();
+                ? null : node.path(field).asInt();
     }
 
     private Boolean getBooleanOrNull(JsonNode node, String field) {
@@ -180,7 +168,15 @@ public class CollectorHH implements Collector {
         return sj.toString();
     }
 
+    /** собираем names из professional_roles */
+    private String joinProfessionalRoles(JsonNode arr) {
+        if (!arr.isArray() || arr.isEmpty()) return null;
+        StringJoiner sj = new StringJoiner(",");
+        arr.forEach(el -> sj.add(el.path("name").asText()));
+        return sj.toString();
+    }
+
     private OffsetDateTime parseDate(String iso) {
-        return iso == null ? null : OffsetDateTime.parse(iso, HH_DT);
+        return (iso == null) ? null : OffsetDateTime.parse(iso, HH_DT);
     }
 }

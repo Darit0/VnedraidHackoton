@@ -5,24 +5,19 @@
 
     <modelVersion>4.0.0</modelVersion>
 
+    <!-- Parent = корневой pom -->
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.0</version>
-        <relativePath/>
+        <groupId>vnedraid</groupId>
+        <artifactId>vnedraid-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <groupId>vnedraid</groupId>
     <artifactId>InputService</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>InputService</name>
     <description>Collect vacancies from HH.ru</description>
 
-    <properties>
-        <java.version>21</java.version>
-    </properties>
-
     <dependencies>
+
         <!-- Spring -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -37,7 +32,7 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
-        <!-- DB driver -->
+        <!-- Postgres -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -50,12 +45,14 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Утилиты -->
+        <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
+
+        <!-- DevTools (опционально) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
@@ -78,7 +75,7 @@
 
     <build>
         <plugins>
-            <!-- обработка lombok-аннотаций компилятором -->
+            <!-- Lombok annotation processor -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -92,6 +89,7 @@
                 </configuration>
             </plugin>
 
+            <!-- Spring Boot plugin (версия наследуется из pluginManagement) -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

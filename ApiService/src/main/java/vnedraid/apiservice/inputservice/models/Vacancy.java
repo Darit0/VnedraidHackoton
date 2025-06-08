@@ -44,7 +44,7 @@ public class Vacancy {
     private String driverLicenseCategories;
 
     /** Профессиональная роль(и) через запятую (Java-разработчик, Тестировщик …) */
-    private String professionalRoles;               //  ←  НОВОЕ ПОЛЕ
+    private String professionalRoles;
 
     /** График (Полный день, Сменный …) */
     private String schedule;
